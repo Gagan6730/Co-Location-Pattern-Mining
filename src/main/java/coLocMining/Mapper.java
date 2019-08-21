@@ -47,14 +47,14 @@ public class Mapper {
 		 * .getOrCreate(); JavaRDD<String> lines =
 		 * spark.read().textFile(args[0]).javaRDD();
 		 */
-		JavaRDD<Object> allSpatialObjects = lines.map(x -> create_Object(x));
+//		JavaRDD<Object> allSpatialObjects = lines.map(x -> create_Object(x));
 //		JavaRDD<GridNo> allGridValues = allSpatialObjects.map(x -> findRegion(x,0.5)) ;
 		//mapping objects to grid number
-		JavaPairRDD<Object,GridNo> allGridValues=allSpatialObjects.mapToPair(new PairFunction<Object, Object, GridNo>() {
+		JavaPairRDD<Object,GridNo> allGridValues=lines.mapToPair(new PairFunction<String, Object, GridNo>() {
 			@Override
-			public Tuple2<Object, GridNo> call(Object object) throws Exception {
-
-				return new Tuple2<Object, GridNo>(object,findRegion(object,0.5));
+			public Tuple2<Object, GridNo> call(String s) throws Exception {
+				Object o=create_Object(s);
+				return new Tuple2<Object, GridNo>(o,findRegion(o,0.5));
 			}
 		});
 		System.out.println(allGridValues.collect());
