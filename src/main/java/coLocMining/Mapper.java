@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.awt.Point;
+import java.util.List;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
@@ -50,12 +51,9 @@ public class Mapper {
 //		JavaRDD<Object> allSpatialObjects = lines.map(x -> create_Object(x));
 //		JavaRDD<GridNo> allGridValues = allSpatialObjects.map(x -> findRegion(x,0.5)) ;
 		//mapping objects to grid number
-		JavaPairRDD<Object,GridNo> allGridValues=lines.mapToPair(new PairFunction<String, Object, GridNo>() {
-			@Override
-			public Tuple2<Object, GridNo> call(String s) throws Exception {
-				Object o=create_Object(s);
-				return new Tuple2<Object, GridNo>(o,findRegion(o,0.5));
-			}
+		JavaPairRDD<Object,GridNo> allGridValues=lines.mapToPair((PairFunction<String, Object, GridNo>) s -> {
+			Object o=create_Object(s);
+			return new Tuple2<Object, GridNo>(o,findRegion(o,0.5));
 		});
 		System.out.println(allGridValues.collect());
 		
@@ -73,7 +71,8 @@ public class Mapper {
 		
 		
 		writer.close();
-		
+
+//		JavaPairRDD<Object, List<Object>>
 //		Point[] pts = Read_Points.readTextFileUsingScanner("Grid_values.txt");
 //		Point[] pairs = PlaneSweep.closestPair(pts);
 //		PrintWriter writer1 = new PrintWriter("Closest_Pairs.txt", "UTF-8");
