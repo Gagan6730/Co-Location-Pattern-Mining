@@ -17,13 +17,19 @@ public static Point[] closestPair(Point[] points) {
     //Get the points and sort them
     Point[] sorted = Arrays.copyOf(points, points.length);
     Arrays.sort(sorted, HORIZONTAL_COMPARATOR);
+    System.out.println("Sorted Points");
+    for(Point p:sorted)
+    {
+        System.out.println(p.x+" "+p.y);
+    }
 
     //When we start the left most candidate is the first one
     int leftMostCandidateIndex = 0;
 
     //Vertically sorted set of candidates
-    SortedSet<Point> candidates = new TreeSet<Point>(VERTICAL_COMPARATOR);
+    SortedSet<Point> candidates = new TreeSet<>(VERTICAL_COMPARATOR);
 
+    System.out.println(candidates.size());
     //For each point from left to right
     for (Point current : sorted) {
         //Shrink the candidates

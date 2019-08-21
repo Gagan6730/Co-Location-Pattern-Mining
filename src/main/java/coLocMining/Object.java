@@ -1,10 +1,13 @@
 package coLocMining;
 
-public class Object {
+import java.io.Serializable;
+
+public class Object implements Serializable {
   String event_type;
   int instance_id;
   double x;
   double y;
+//  GridNo grd_num;
 public Object(String event_type, int instance_id, double x, double y) {
 		super();
 		this.event_type = event_type;
@@ -12,7 +15,16 @@ public Object(String event_type, int instance_id, double x, double y) {
 		this.x = x;
 		this.y = y;
 	}
-public String getEvent_type() {
+
+//	public Object(String event_type, int instance_id, double x, double y, GridNo grd_num) {
+//		this.event_type = event_type;
+//		this.instance_id = instance_id;
+//		this.x = x;
+//		this.y = y;
+//		this.grd_num = grd_num;
+//	}
+
+	public String getEvent_type() {
 	return event_type;
 }
 public void setEvent_type(String event_type) {
@@ -37,5 +49,12 @@ public double getY() {
 public void setY(double y) {
 	this.y = y;
 }
-  
+
+//	public GridNo getGrd_num() {
+//		return grd_num;
+//	}
+//
+//	public void setGrd_num(GridNo grd_num) {
+//		this.grd_num = grd_num;
+//	}
 }

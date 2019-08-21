@@ -7,10 +7,13 @@ import java.awt.Point;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.sql.SparkSession;
+//import org.apache.spark.sql.SparkSession;
+import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.sql.DataFrameReader;
+import scala.Tuple2;
 //import org.apache.spark.Logging;
 
 public class Mapper {
@@ -45,16 +48,25 @@ public class Mapper {
 		 * spark.read().textFile(args[0]).javaRDD();
 		 */
 		JavaRDD<Object> allSpatialObjects = lines.map(x -> create_Object(x));
-		JavaRDD<GridNo> allGridValues = allSpatialObjects.map(x -> findRegion(x,0.5)) ;
-		
+//		JavaRDD<GridNo> allGridValues = allSpatialObjects.map(x -> findRegion(x,0.5)) ;
+		//mapping objects to grid number
+		JavaPairRDD<Object,GridNo> allGridValues=allSpatialObjects.mapToPair(new PairFunction<Object, Object, GridNo>() {
+			@Override
+			public Tuple2<Object, GridNo> call(Object object) throws Exception {
+
+				return new Tuple2<Object, GridNo>(object,findRegion(object,0.5));
+			}
+		});
 		System.out.println(allGridValues.collect());
 		
 		PrintWriter writer = new PrintWriter("Grid_values.txt", "UTF-8");
 		
 	     	
 		
-		for (GridNo value: allGridValues.collect()) {
-			writer.println(value.getGrid_x()+" "+value.getGrid_y());
+		for (Tuple2 value: allGridValues.collect()) {
+			Object o= (Object) value._1;
+			GridNo gridNo= (GridNo) value._2;
+			writer.println(o.event_type+" "+o.instance_id+" "+o.x+" "+o.y+" => "+gridNo.grid_x+" "+gridNo.grid_y);
 			
 			
 		}
@@ -62,13 +74,13 @@ public class Mapper {
 		
 		writer.close();
 		
-		Point[] pts = Read_Points.readTextFileUsingScanner("Grid_values.txt");
-		Point[] pairs = PlaneSweep.closestPair(pts);
-		PrintWriter writer1 = new PrintWriter("Closest_Pairs.txt", "UTF-8");
-		for ( int i=0; i<pairs.length;i++ )
-		writer1.println(pairs[i].x+" "+pairs[i].y);
-
-		writer1.close();
+//		Point[] pts = Read_Points.readTextFileUsingScanner("Grid_values.txt");
+//		Point[] pairs = PlaneSweep.closestPair(pts);
+//		PrintWriter writer1 = new PrintWriter("Closest_Pairs.txt", "UTF-8");
+//		for ( int i=0; i<pairs.length;i++ )
+//		writer1.println(pairs[i].x+" "+pairs[i].y);
+//
+//		writer1.close();
 		
 		sc.stop();
 	}
