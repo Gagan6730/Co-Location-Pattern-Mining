@@ -6,13 +6,14 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.api.java.function.PairFunction;
+import scala.Array;
 import scala.Tuple2;
 
 import java.awt.Point;
 import java.util.*;
 
 public class PlaneSweep {
-    private static double calca_dist(Point s1,Point s2)
+    private static double calca_dist(Object s1,Object s2)
     {
         double diff_x=Math.pow(s1.getX()-s2.getX(),2);
         double diff_y=Math.pow(s1.getY()-s2.getY(),2);
@@ -25,12 +26,30 @@ public static JavaPairRDD<Object, List<Object>> closestPair(JavaPairRDD<Object,G
 
     //When we start the min distance is the infinity
     double crtMinDist = thresh_dist;
-
+    allGridValues.sortByKey(new Comparator<Object>() {
+        @Override
+        public int compare(Object o1, Object o2) {
+            if(o1.x>o2.x)
+            {
+                return 1;
+            }
+            else if(o1.x<o2.x)
+            {
+                return -1;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+    });
     JavaPairRDD<Object,List<Object>> starNeighbour=allGridValues.mapToPair(new PairFunction<Tuple2<Object, GridNo>, Object, List<Object>>() {
         @Override
         public Tuple2<Object, List<Object>> call(Tuple2<Object, GridNo> input) throws Exception {
 
+            Object currentObject=input._1;//current object
             //getting all objects
+            //rdd for all objects
             JavaRDD<Object> objectList=allGridValues.map(new Function<Tuple2<Object, GridNo>, Object>() {
                 @Override
                 public Object call(Tuple2<Object, GridNo> objectGridNoTuple2) throws Exception {
@@ -38,19 +57,54 @@ public static JavaPairRDD<Object, List<Object>> closestPair(JavaPairRDD<Object,G
                     return objectGridNoTuple2._1;
                 }
             });
-            LinkedList<Object> activeSet=new LinkedList<>();
+            //list of all objects
+            LinkedList<Object> activeSet= new LinkedList<>();
             for(Object obj: objectList.collect())
             {
-                if(Math.abs(input._1.x-obj.x)>crtMinDist)
+                activeSet.add(obj);
+
+            }
+            //removing according to x coordinate
+            for(Object obj: objectList.collect())
+            {
+                if(Math.abs(currentObject.x-obj.x)>crtMinDist)
                 {
                     activeSet.remove(obj);
                 }
             }
 
+            LinkedList<Object> RangeOnY= activeSet;
+            Iterator itr=RangeOnY.iterator();
+            while(itr.hasNext())
+            {
+                Object p= (Object) itr.next();
+                if(Math.abs(currentObject.y-p.y)>crtMinDist)
+                {
+                    activeSet.remove(p);
+                }
+            }
+            LinkedList<Object> final_list=new LinkedList<>();
+            for(Object o: activeSet)
+            {
+                if(calca_dist(currentObject,o)<=thresh_dist)
+                {
+                    if(currentObject.event_type.compareTo(o.event_type)<0)
+                    {
+                        final_list.add(o);
+                    }
+                }
+            }
+            final_list.sort(new Comparator<Object>() {
+                @Override
+                public int compare(Object o1, Object o2) {
+                    return o1.event_type.compareTo(o2.event_type);
+                }
+            });
 
-            return null;
+            return new Tuple2<Object,List<Object>>(currentObject,final_list);
         }
-    })
+    });
+    return starNeighbour;
 //            flatMapToPair(new PairFlatMapFunction<Tuple2<Object, GridNo>, Object, List<Object>>() {
 //        @Override
 //        public Iterator<Tuple2<Object, List<Object>>> call(Tuple2<Object, GridNo> objectGridNoTuple2) throws Exception {
