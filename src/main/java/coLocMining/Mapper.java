@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.awt.Point;
+import java.util.LinkedList;
 import java.util.List;
 
 import org.apache.spark.SparkConf;
@@ -72,8 +73,22 @@ public class Mapper {
 		
 		writer.close();
 
-//		JavaPairRDD<Object, List<Object>>
-//		Point[] pts = Read_Points.readTextFileUsingScanner("Grid_values.txt");
+		JavaPairRDD<Object, List<Object>> starNeighbour=PlaneSweep.closestPair(allGridValues,0.5);
+		writer = new PrintWriter("Star_Neighbour.txt", "UTF-8");
+		for (Tuple2 value: starNeighbour.collect()) {
+			Object o= (Object) value._1;
+			List<Object> list= (LinkedList<Object>) value._2;
+			writer.print(o.event_type+" "+o.instance_id+" => ");
+			for(Object obj :list)
+			{
+				writer.print(obj.event_type+" "+obj.instance_id+" , ");
+			}
+			writer.println();
+
+
+		}
+		writer.close();
+//		Point[] pts = Read_Points.readTex=tFileUsingScanner("Grid_values.txt");
 //		Point[] pairs = PlaneSweep.closestPair(pts);
 //		PrintWriter writer1 = new PrintWriter("Closest_Pairs.txt", "UTF-8");
 //		for ( int i=0; i<pairs.length;i++ )

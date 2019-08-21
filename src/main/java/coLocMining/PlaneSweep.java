@@ -43,6 +43,19 @@ public static JavaPairRDD<Object, List<Object>> closestPair(JavaPairRDD<Object,G
             }
         }
     });
+    JavaRDD<Object> objectList=allGridValues.map(new Function<Tuple2<Object, GridNo>, Object>() {
+        @Override
+        public Object call(Tuple2<Object, GridNo> objectGridNoTuple2) throws Exception {
+
+            return objectGridNoTuple2._1;
+        }
+    });
+    LinkedList<Object> objects_list= new LinkedList<>();
+    for(Object obj: objectList.collect())
+    {
+        objects_list.add(obj);
+
+    }
     JavaPairRDD<Object,List<Object>> starNeighbour=allGridValues.mapToPair(new PairFunction<Tuple2<Object, GridNo>, Object, List<Object>>() {
         @Override
         public Tuple2<Object, List<Object>> call(Tuple2<Object, GridNo> input) throws Exception {
@@ -50,22 +63,16 @@ public static JavaPairRDD<Object, List<Object>> closestPair(JavaPairRDD<Object,G
             Object currentObject=input._1;//current object
             //getting all objects
             //rdd for all objects
-            JavaRDD<Object> objectList=allGridValues.map(new Function<Tuple2<Object, GridNo>, Object>() {
-                @Override
-                public Object call(Tuple2<Object, GridNo> objectGridNoTuple2) throws Exception {
 
-                    return objectGridNoTuple2._1;
-                }
-            });
             //list of all objects
             LinkedList<Object> activeSet= new LinkedList<>();
-            for(Object obj: objectList.collect())
+            for(Object obj: objects_list)
             {
                 activeSet.add(obj);
 
             }
             //removing according to x coordinate
-            for(Object obj: objectList.collect())
+            for(Object obj: objects_list)
             {
                 if(Math.abs(currentObject.x-obj.x)>crtMinDist)
                 {
@@ -73,7 +80,11 @@ public static JavaPairRDD<Object, List<Object>> closestPair(JavaPairRDD<Object,G
                 }
             }
 
-            LinkedList<Object> RangeOnY= activeSet;
+            LinkedList<Object> RangeOnY= new LinkedList<>();
+            for(Object obj: activeSet)
+            {
+                RangeOnY.add(obj);
+            }
             Iterator itr=RangeOnY.iterator();
             while(itr.hasNext())
             {
