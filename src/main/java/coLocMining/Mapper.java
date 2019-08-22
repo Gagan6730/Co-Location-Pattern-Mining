@@ -4,10 +4,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.awt.Point;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.atomic.LongAccumulator;
 
 import org.apache.spark.SparkConf;
@@ -16,6 +13,7 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.JavaRDD;
 //import org.apache.spark.sql.SparkSession;
+import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.sql.DataFrameReader;
@@ -51,29 +49,36 @@ public class Mapper {
         //count of number of instances of each event type
 
 		JavaRDD<Object> allSpatialObjects = lines.map(x -> create_Object(x));
-		HashMap<String,Integer> countNumOfInst=new HashMap<>();
-		for(Object obj:allSpatialObjects.collect())
+//		HashMap<String,Integer> countNumOfInst=new HashMap<>();
+//		for(Object obj:allSpatialObjects.collect())
+//		{
+//			if(countNumOfInst.containsKey(obj.event_type))
+//			{
+//				int prev=countNumOfInst.get(obj.event_type);
+//				countNumOfInst.replace(obj.event_type,prev+1);
+//			}
+//			else
+//			{
+//				countNumOfInst.put(obj.event_type,1);
+//			}
+//		}
+
+		JavaPairRDD<String,Integer> countNumOfInst=allSpatialObjects
+				.flatMap(object -> Arrays.asList(object.event_type)
+						.iterator()).mapToPair(event -> new Tuple2<>(event,1)).reduceByKey((a,b)->a+b);
+
+		System.out.println("Count of num of instance of each type");
+		for(Tuple2 t:countNumOfInst.collect())
 		{
-			if(countNumOfInst.containsKey(obj.event_type))
-			{
-				int prev=countNumOfInst.get(obj.event_type);
-				countNumOfInst.replace(obj.event_type,prev+1);
-			}
-			else
-			{
-				countNumOfInst.put(obj.event_type,1);
-			}
+			System.out.println(t._1+" "+t._2);
 		}
-
-
 		//mapping objects to grid number
 
 		JavaPairRDD<Object,GridNo> allGridValues=lines.mapToPair((PairFunction<String, Object, GridNo>) s -> {
 			Object o=create_Object(s);
 			return new Tuple2<Object, GridNo>(o,findRegion(o,0.5));
 		});
-		System.out.println(allGridValues.collect());
-		
+
 		PrintWriter writer = new PrintWriter("Grid_values.txt", "UTF-8");
 		
 	     	
