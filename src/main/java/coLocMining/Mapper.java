@@ -4,8 +4,11 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.awt.Point;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.LongAccumulator;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
@@ -13,6 +16,7 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.JavaRDD;
 //import org.apache.spark.sql.SparkSession;
+import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.sql.DataFrameReader;
 import scala.Tuple2;
@@ -43,15 +47,27 @@ public class Mapper {
 		SparkConf sf = new SparkConf().setMaster("local[3]").setAppName("GetRegion");
         JavaSparkContext sc = new JavaSparkContext(sf);
         JavaRDD<String> lines = sc.textFile("data.txt");
-        
-		/*
-		 * SparkSession spark = SparkSession .builder() .appName("GetRegion")
-		 * .getOrCreate(); JavaRDD<String> lines =
-		 * spark.read().textFile(args[0]).javaRDD();
-		 */
-//		JavaRDD<Object> allSpatialObjects = lines.map(x -> create_Object(x));
-//		JavaRDD<GridNo> allGridValues = allSpatialObjects.map(x -> findRegion(x,0.5)) ;
+
+        //count of number of instances of each event type
+
+		JavaRDD<Object> allSpatialObjects = lines.map(x -> create_Object(x));
+		HashMap<String,Integer> countNumOfInst=new HashMap<>();
+		for(Object obj:allSpatialObjects.collect())
+		{
+			if(countNumOfInst.containsKey(obj.event_type))
+			{
+				int prev=countNumOfInst.get(obj.event_type);
+				countNumOfInst.replace(obj.event_type,prev+1);
+			}
+			else
+			{
+				countNumOfInst.put(obj.event_type,1);
+			}
+		}
+
+
 		//mapping objects to grid number
+
 		JavaPairRDD<Object,GridNo> allGridValues=lines.mapToPair((PairFunction<String, Object, GridNo>) s -> {
 			Object o=create_Object(s);
 			return new Tuple2<Object, GridNo>(o,findRegion(o,0.5));
