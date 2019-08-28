@@ -27,7 +27,7 @@ import scala.Tuple2;
 
 public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
 
-    public static Double ParticipationIndex(JavaRDD<String> candidate_colocation, JavaRDD<LinkedList<Object>> instances, JavaPairRDD<String,Integer> countNumOfInst)
+    public static Double ParticipationIndex(LinkedList<String> candidate_colocation, LinkedList<LinkedList<Object>> instances, JavaPairRDD<String,Integer> countNumOfInst)
     {
         //creating a map from event type to integer to store the number of instances of each event type
         HashMap<String,Integer> countMap=new HashMap<>();
@@ -38,67 +38,36 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
 
         //java rdd for all instances. Rather that grouping the according to co-location event types, this is just a list of all
         //instances. Eg. A1,B1,C1,A1,B1,C2,A2,B2,C2
-        JavaRDD<Object> allObjectsInInstances=instances.flatMap(new FlatMapFunction<LinkedList<Object>, Object>() {
-            @Override
-            public Iterator<Object> call(LinkedList<Object> objects) throws Exception {
-                return objects.iterator();
-            }
-        });
-
-        //distinct count for every event type
-        JavaPairRDD<String,Long> distinctCountInInstance=candidate_colocation.mapToPair(new PairFunction<String, String, Long>() {
-            @Override
-            public Tuple2<String, Long> call(String s) throws Exception {
-                long distictCount=allObjectsInInstances.filter(new Function<Object, Boolean>() {
-                    @Override
-                    public Boolean call(Object object) throws Exception {
-                        if(object.event_type.equals(s))
-                        {
-                            return true;
-                        }
-                        else
-                        {
-                            return false;
-                        }
-                    }
-                }).distinct().count();
-
-                return new Tuple2<>(s,distictCount);
-            }
-        });
-
-
-        //participation ratio for every event type
-        JavaPairRDD<String,Double> participationRatio=distinctCountInInstance.mapToPair(new PairFunction<Tuple2<String, Long>, String, Double>() {
-            @Override
-            public Tuple2<String, Double> call(Tuple2<String, Long> stringLongTuple2) throws Exception {
-                double PR=(stringLongTuple2._2/(double)countMap.get(stringLongTuple2._1));
-                return new Tuple2<>(stringLongTuple2._1,PR);
-            }
-        });
-
-        //participation index
-        Double PI=participationRatio.map(new Function<Tuple2<String, Double>, Double>() {
-            @Override
-            public Double call(Tuple2<String, Double> stringDoubleTuple2) throws Exception {
-                return stringDoubleTuple2._2;
-            }
-        }).min(new Comparator<Double>() {
-            @Override
-            public int compare(Double o1, Double o2) {
-                if(o1<o2)
+        HashMap<String, HashSet<Object>> objectSet=new HashMap<>();
+        for(LinkedList<Object> list: instances)
+        {
+            for(Object object:list)
+            {
+                if(objectSet.containsKey(object.event_type))
                 {
-                    return 1;
+                    HashSet<Object> set=objectSet.get(object.event_type);
+                    set.add(object);
+                    objectSet.replace(object.event_type,set);
                 }
-                else if(o1==o2)
+                else
                 {
-                    return 0;
-                }
-                else {
-                    return -1;
+                    HashSet<Object> set=new HashSet<>();
+                    set.add(object);
+                    objectSet.put(object.event_type,set);
                 }
             }
-        });
+        }
+
+        Double PI=Double.MAX_VALUE;
+        for(String str:candidate_colocation)
+        {
+            Double participationRatio=(objectSet.get(str).size()/(double)countMap.get(str));
+            if(participationRatio<PI)
+            {
+                PI=participationRatio;
+            }
+        }
+
 
 
         return PI;
@@ -192,7 +161,7 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
 						.iterator()).mapToPair(event -> new Tuple2<>(event,1)).reduceByKey((a,b)->a+b);
 
 		final long numberOfFeatures=countNumOfInst.count();
-
+		final Double threshPI=0.6;
 		System.out.println("Count of num of instance of each type");
 		for(Tuple2 t:countNumOfInst.collect())
 		{
@@ -236,6 +205,8 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
 
 		}
 		writer.close();
+
+        JavaRDD<LinkedList<String>> co_location_patterns;
 
         int k=2;
         while(k<=2)
@@ -288,6 +259,7 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
 
                 for(Tuple2<LinkedList<String>,LinkedList<LinkedList<Object>>> tuple2:instancesOfSizeK.collect())
                 {
+                    Double PI=ParticipationIndex(tuple2._1,tuple2._2,countNumOfInst);
                     LinkedList<String> list=tuple2._1;
                     System.out.print("(");
                     for(int i=0;i<list.size()-1;i++)
@@ -305,9 +277,47 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
                         {
                             System.out.print(l.get(i).event_type+l.get(i).instance_id+" ");
                         }
+                        System.out.println(PI);
                         System.out.println();
                     }
                 }
+
+//                Double PI=Double.MAX_VALUE;
+                LinkedList<LinkedList<String>> coloc=new LinkedList<>();
+                for(Tuple2<LinkedList<String>,LinkedList<LinkedList<Object>>> tuple2:instancesOfSizeK.collect())
+                {
+                    Double PI=ParticipationIndex(tuple2._1,tuple2._2,countNumOfInst);
+
+                    if(PI>=threshPI)
+                    {
+                        coloc.add(tuple2._1);
+                    }
+                }
+                JavaRDD<LinkedList<String>> co_location=sc.parallelize(coloc);
+                writer = new PrintWriter("CoLocation_Pattern.txt", "UTF-8");
+                for (LinkedList<String> list: co_location.collect()) {
+
+                    for(String obj :list)
+                    {
+                        writer.print(obj+" ");
+                    }
+                    writer.println();
+
+
+                }
+                writer.close();
+
+//                instancesOfSizeK.filter(new Function<Tuple2<LinkedList<String>, LinkedList<LinkedList<Object>>>, Boolean>() {
+//                    @Override
+//                    public Boolean call(Tuple2<LinkedList<String>, LinkedList<LinkedList<Object>>> pair) throws Exception {
+//                        JavaRDD<String> candidate=sc.parallelize(pair._1)
+//                        return null;
+//                    }
+//                })
+            }
+            else
+            {
+
             }
             k++;
         }
