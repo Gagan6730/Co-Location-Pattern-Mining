@@ -8,6 +8,7 @@ import java.math.BigInteger;
 import java.util.*;
 import java.util.concurrent.atomic.LongAccumulator;
 
+import org.apache.spark.InternalAccumulator;
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -142,11 +143,61 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
 		
 	}
 
-	public static void generateColocations(JavaRDD<String> eventTypes,int k)
-	{
+	public static LinkedList<LinkedList<String>> generateSubsets(LinkedList<String> list,int k)
+    {
+        LinkedList<LinkedList<String>> subsets=new LinkedList<>();
+        int opsize= (int) Math.pow(2,list.size());
+        for(int c=1;c<opsize;c++)
+        {
+            LinkedList<String> temp_list=new LinkedList<>();
+            for(int j = 0; j< list.size(); j++)
+            {
+                if(BigInteger.valueOf(c).testBit(j))
+                {
+                    list.add(list.get(j));
+                }
+            }
+            if(list.size()==k)
+            {
+                subsets.add(list);
+            }
+        }
 
+        return subsets;
 	}
-	
+
+	public static boolean checkSubsets(LinkedList<LinkedList<String>> prevColocations, LinkedList<String> candidates)
+    {
+        Collections.sort(candidates);
+
+        int f=0;
+        for(LinkedList<String> list:prevColocations)
+        {
+
+            Collections.sort(list);
+            if(list.size()!=candidates.size())
+            {
+                continue;
+            }
+            else
+            {
+                int flag=0;
+                for (int i = 0; i <list.size() ; i++) {
+                    if(!candidates.get(i).equals(list.get(i)))
+                    {
+                        flag=1;
+                        break;
+                    }
+
+                }
+                if(flag==0)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 	public static void main(String[] args) throws FileNotFoundException, IOException  {
 		
 		SparkConf sf = new SparkConf().setMaster("local[3]").setAppName("GetRegion");
@@ -161,7 +212,7 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
 						.iterator()).mapToPair(event -> new Tuple2<>(event,1)).reduceByKey((a,b)->a+b);
 
 		final long numberOfFeatures=countNumOfInst.count();
-		final Double threshPI=0.6;
+		final Double threshPI=0.3;
 		System.out.println("Count of num of instance of each type");
 		for(Tuple2 t:countNumOfInst.collect())
 		{
@@ -206,10 +257,11 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
 		}
 		writer.close();
 
-        JavaRDD<LinkedList<String>> co_location_patterns;
-
+//        JavaRDD<LinkedList<String>> co_location_patterns;
+        HashMap<Integer,LinkedList<LinkedList<String>>> co_location_patterns=new HashMap<>();
+        JavaPairRDD<LinkedList<String>,LinkedList<LinkedList<Object>>> instancesOfSizeK_1;
         int k=2;
-        while(k<=2)
+        while(k<=numberOfFeatures)
         {
             //candidate co-locations of size k
             JavaRDD<LinkedList<String>> candidateColocations=sc.parallelize(GenerateCandidateColocations(countNumOfInst,k));
@@ -225,6 +277,8 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
             if(k==2)
             {
                 List<Tuple2<Object, List<Object>>> starNeighList=starNeighbour.collect();
+
+                //creating instances of size 2
                 JavaPairRDD<LinkedList<String>,LinkedList<LinkedList<Object>>> instancesOfSizeK=candidateColocations.mapToPair(new PairFunction<LinkedList<String>, LinkedList<String>, LinkedList<LinkedList<Object>>>() {
                     @Override
                     public Tuple2<LinkedList<String>, LinkedList<LinkedList<Object>>> call(LinkedList<String> colocation) throws Exception {
@@ -266,7 +320,7 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
                     {
                         System.out.print(list.get(i)+",");
                     }
-                    System.out.println(list.get(list.size()-1)+") =>");
+                    System.out.println(list.get(list.size()-1)+") => "+PI);
 
 
                     LinkedList<LinkedList<Object>> rdd=tuple2._2;
@@ -277,7 +331,7 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
                         {
                             System.out.print(l.get(i).event_type+l.get(i).instance_id+" ");
                         }
-                        System.out.println(PI);
+
                         System.out.println();
                     }
                 }
@@ -305,7 +359,13 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
 
 
                 }
-                writer.close();
+                LinkedList<LinkedList<String>> final_colocation=new LinkedList<>();
+
+                for (LinkedList<String> list: co_location.collect()) {
+                    final_colocation.add(list);
+                }
+                co_location_patterns.put(k,final_colocation);
+//                writer.close();
 
 //                instancesOfSizeK.filter(new Function<Tuple2<LinkedList<String>, LinkedList<LinkedList<Object>>>, Boolean>() {
 //                    @Override
@@ -314,9 +374,52 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
 //                        return null;
 //                    }
 //                })
+                instancesOfSizeK_1=instancesOfSizeK;
             }
             else
             {
+                int subsetSize=k-1;
+                //checking if all subsets of a k size colocation exists in k-1 size colocation
+                JavaRDD<LinkedList<String>> allColocationsK= candidateColocations.filter(new Function<LinkedList<String>, Boolean>() {
+                    @Override
+                    public Boolean call(LinkedList<String> strings) throws Exception {
+                        LinkedList<LinkedList<String>> subset_of_size_k=generateSubsets(strings,subsetSize);
+                        int flag=0;
+                        for(LinkedList<String> list:subset_of_size_k)
+                        {
+                            if(!checkSubsets(co_location_patterns.get(subsetSize),list))
+                            {
+                                flag=1;
+                            }
+                        }
+                        if(flag==0)
+                        {
+//                            candidates_of_size_k.add(strings);
+                            return true;
+                        }
+                        else
+                        {
+                            return false;
+                        }
+                    }
+                });
+
+//                //creating instances of size k;
+//                LinkedList<LinkedList<Object>> candidateInstances;
+//                for(LinkedList<String> list:allColocationsK.collect())
+//                {
+//                    Collections.sort(list);
+//                    starNeighbour.filter(new Function<Tuple2<Object, List<Object>>, Boolean>() {
+//                        @Override
+//                        public Boolean call(Tuple2<Object, List<Object>> objectListTuple2) throws Exception {
+//                            if(objectListTuple2._1.event_type.equals(list.getFirst()))
+//                            {
+//
+//                            }
+//                            return false;
+//                        }
+//                    })
+//                }
 
             }
             k++;
