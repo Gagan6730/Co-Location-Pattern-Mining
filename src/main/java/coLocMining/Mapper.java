@@ -165,7 +165,39 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
 
         return subsets;
 	}
-	
+
+	public static boolean checkSubsets(LinkedList<LinkedList<String>> prevColocations, LinkedList<String> candidates)
+    {
+        Collections.sort(candidates);
+
+        int f=0;
+        for(LinkedList<String> list:prevColocations)
+        {
+
+            Collections.sort(list);
+            if(list.size()!=candidates.size())
+            {
+                continue;
+            }
+            else
+            {
+                int flag=0;
+                for (int i = 0; i <list.size() ; i++) {
+                    if(!candidates.get(i).equals(list.get(i)))
+                    {
+                        flag=1;
+                        break;
+                    }
+
+                }
+                if(flag==0)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 	public static void main(String[] args) throws FileNotFoundException, IOException  {
 		
 		SparkConf sf = new SparkConf().setMaster("local[3]").setAppName("GetRegion");
@@ -227,6 +259,7 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
 
 //        JavaRDD<LinkedList<String>> co_location_patterns;
         HashMap<Integer,LinkedList<LinkedList<String>>> co_location_patterns=new HashMap<>();
+        JavaPairRDD<LinkedList<String>,LinkedList<LinkedList<Object>>> instancesOfSizeK_1;
         int k=2;
         while(k<=numberOfFeatures)
         {
@@ -244,6 +277,8 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
             if(k==2)
             {
                 List<Tuple2<Object, List<Object>>> starNeighList=starNeighbour.collect();
+
+                //creating instances of size 2
                 JavaPairRDD<LinkedList<String>,LinkedList<LinkedList<Object>>> instancesOfSizeK=candidateColocations.mapToPair(new PairFunction<LinkedList<String>, LinkedList<String>, LinkedList<LinkedList<Object>>>() {
                     @Override
                     public Tuple2<LinkedList<String>, LinkedList<LinkedList<Object>>> call(LinkedList<String> colocation) throws Exception {
@@ -339,17 +374,53 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
 //                        return null;
 //                    }
 //                })
+                instancesOfSizeK_1=instancesOfSizeK;
             }
             else
             {
                 int subsetSize=k-1;
-                candidateColocations.filter(new Function<LinkedList<String>, Boolean>() {
+                //checking if all subsets of a k size colocation exists in k-1 size colocation
+                JavaRDD<LinkedList<String>> allColocationsK= candidateColocations.filter(new Function<LinkedList<String>, Boolean>() {
                     @Override
                     public Boolean call(LinkedList<String> strings) throws Exception {
                         LinkedList<LinkedList<String>> subset_of_size_k=generateSubsets(strings,subsetSize);
-                        return null;
+                        int flag=0;
+                        for(LinkedList<String> list:subset_of_size_k)
+                        {
+                            if(!checkSubsets(co_location_patterns.get(subsetSize),list))
+                            {
+                                flag=1;
+                            }
+                        }
+                        if(flag==0)
+                        {
+//                            candidates_of_size_k.add(strings);
+                            return true;
+                        }
+                        else
+                        {
+                            return false;
+                        }
                     }
                 });
+
+//                //creating instances of size k;
+//                LinkedList<LinkedList<Object>> candidateInstances;
+//                for(LinkedList<String> list:allColocationsK.collect())
+//                {
+//                    Collections.sort(list);
+//                    starNeighbour.filter(new Function<Tuple2<Object, List<Object>>, Boolean>() {
+//                        @Override
+//                        public Boolean call(Tuple2<Object, List<Object>> objectListTuple2) throws Exception {
+//                            if(objectListTuple2._1.event_type.equals(list.getFirst()))
+//                            {
+//
+//                            }
+//                            return false;
+//                        }
+//                    })
+//                }
+
             }
             k++;
         }
