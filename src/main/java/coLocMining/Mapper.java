@@ -8,6 +8,7 @@ import java.math.BigInteger;
 import java.util.*;
 import java.util.concurrent.atomic.LongAccumulator;
 
+import org.apache.spark.InternalAccumulator;
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -142,9 +143,27 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
 		
 	}
 
-	public static void generateColocations(JavaRDD<String> eventTypes,int k)
-	{
+	public static LinkedList<LinkedList<String>> generateSubsets(LinkedList<String> list,int k)
+    {
+        LinkedList<LinkedList<String>> subsets=new LinkedList<>();
+        int opsize= (int) Math.pow(2,list.size());
+        for(int c=1;c<opsize;c++)
+        {
+            LinkedList<String> temp_list=new LinkedList<>();
+            for(int j = 0; j< list.size(); j++)
+            {
+                if(BigInteger.valueOf(c).testBit(j))
+                {
+                    list.add(list.get(j));
+                }
+            }
+            if(list.size()==k)
+            {
+                subsets.add(list);
+            }
+        }
 
+        return subsets;
 	}
 	
 	public static void main(String[] args) throws FileNotFoundException, IOException  {
@@ -161,7 +180,7 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
 						.iterator()).mapToPair(event -> new Tuple2<>(event,1)).reduceByKey((a,b)->a+b);
 
 		final long numberOfFeatures=countNumOfInst.count();
-		final Double threshPI=0.6;
+		final Double threshPI=0.3;
 		System.out.println("Count of num of instance of each type");
 		for(Tuple2 t:countNumOfInst.collect())
 		{
@@ -206,10 +225,10 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
 		}
 		writer.close();
 
-        JavaRDD<LinkedList<String>> co_location_patterns;
-
+//        JavaRDD<LinkedList<String>> co_location_patterns;
+        HashMap<Integer,LinkedList<LinkedList<String>>> co_location_patterns=new HashMap<>();
         int k=2;
-        while(k<=2)
+        while(k<=numberOfFeatures)
         {
             //candidate co-locations of size k
             JavaRDD<LinkedList<String>> candidateColocations=sc.parallelize(GenerateCandidateColocations(countNumOfInst,k));
@@ -266,7 +285,7 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
                     {
                         System.out.print(list.get(i)+",");
                     }
-                    System.out.println(list.get(list.size()-1)+") =>");
+                    System.out.println(list.get(list.size()-1)+") => "+PI);
 
 
                     LinkedList<LinkedList<Object>> rdd=tuple2._2;
@@ -277,7 +296,7 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
                         {
                             System.out.print(l.get(i).event_type+l.get(i).instance_id+" ");
                         }
-                        System.out.println(PI);
+
                         System.out.println();
                     }
                 }
@@ -305,7 +324,13 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
 
 
                 }
-                writer.close();
+                LinkedList<LinkedList<String>> final_colocation=new LinkedList<>();
+
+                for (LinkedList<String> list: co_location.collect()) {
+                    final_colocation.add(list);
+                }
+                co_location_patterns.put(k,final_colocation);
+//                writer.close();
 
 //                instancesOfSizeK.filter(new Function<Tuple2<LinkedList<String>, LinkedList<LinkedList<Object>>>, Boolean>() {
 //                    @Override
@@ -317,7 +342,14 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
             }
             else
             {
-
+                int subsetSize=k-1;
+                candidateColocations.filter(new Function<LinkedList<String>, Boolean>() {
+                    @Override
+                    public Boolean call(LinkedList<String> strings) throws Exception {
+                        LinkedList<LinkedList<String>> subset_of_size_k=generateSubsets(strings,subsetSize);
+                        return null;
+                    }
+                });
             }
             k++;
         }
