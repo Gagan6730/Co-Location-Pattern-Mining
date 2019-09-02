@@ -1,5 +1,6 @@
 package coLocMining;
 import java.io.FileNotFoundException;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.math.BigInteger;
@@ -252,6 +253,22 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
         }
         return finalInstancePattern;
     }
+    public static boolean checkListsOfObject(LinkedList<Object> l1,LinkedList<Object> l2)
+    {
+        if(l1.size()!=l2.size())
+        {
+            return false;
+        }
+        int flag=0;
+        for(int i=0;i<l1.size();i++)
+        {
+            if((!l1.get(i).event_type.equals(l2.get(i).event_type)) || l1.get(i).instance_id!=l2.get(i).instance_id)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
 	public static void main(String[] args) throws FileNotFoundException, IOException  {
 		
 		SparkConf sf = new SparkConf().setMaster("local[3]").setAppName("GetRegion");
@@ -427,6 +444,26 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
 //                    }
 //                })
                 instancesOfSizeK_1=instancesOfSizeK;
+                System.out.println("Instances of size k-1");
+
+                for(Tuple2<LinkedList<String>,LinkedList<LinkedList<Object>>> m:instancesOfSizeK_1.collect())
+                {
+                    for(String str:m._1)
+                    {
+                        System.out.print(str+" ");
+
+                    }
+                    System.out.println("->");
+                    for(LinkedList<Object> list:m._2)
+                    {
+                        System.out.print("\t");
+                        for(Object o:list)
+                        {
+                            System.out.print(o.event_type+o.instance_id+" ");
+                        }
+                        System.out.println();
+                    }
+                }
 
             }
             else
@@ -566,40 +603,95 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
                 for(Map.Entry<LinkedList<String>,LinkedList<LinkedList<Object>>> m:instancesOfSizeKMap.entrySet())
                 {
                     LinkedList<String> coloc=new LinkedList<>(m.getKey());
-                    LinkedList<LinkedList<Object>> InstForColoc=new LinkedList<>(m.getValue());
+                    LinkedList<LinkedList<Object>> InstForColoc = new LinkedList<>();
+                    for(LinkedList<Object> l:m.getValue())
+                    {
+                        LinkedList<Object> list=new LinkedList<>(l);
+                        InstForColoc.add(list);
+                    }
                     Collections.sort(coloc);
 
+                    System.out.println("Sorted objects");
                     for(LinkedList<Object> list:InstForColoc)
                     {
+//                        Object obj=null;
                         for(Object o:list)
                         {
                             if(o.event_type.equals(coloc.getFirst()))
                             {
                                 list.remove(o);
+//                                obj=new Object(o.event_type,o.instance_id,o.x,o.y);
                                 break;
                             }
                         }
+//                        list.remove(obj);
 
                     }
                     coloc.remove(0);
+                    for(String str:coloc)
+                    {
+                        System.out.print(str+" ");
+                    }
+                    System.out.println("=>");
+                    for(LinkedList<Object> list:InstForColoc) {
+                        for (Object o : list) {
+                            System.out.print(o.event_type+o.instance_id+" ");
+                        }
+                        System.out.println();
+                    }
+
 
                     LinkedList<LinkedList<Object>> objectOfSizeK_1=new LinkedList<>();
                     for(Tuple2<LinkedList<String>, LinkedList<LinkedList<Object>>> t:instancesOfSizeK_1.collect())
                     {
+
                         if(coloc.equals(t._1))
                         {
+//                            for(String str:t._1)
+//                            {
+//                                System.out.print(str+" ");
+//                            }
+//                            System.out.println();
                             objectOfSizeK_1=new LinkedList<>(t._2);
                         }
                     }
+//                    System.out.println("Objects of size k-1");
+//                   for(LinkedList<Object> list:objectOfSizeK_1)
+//                   {
+//                       for(Object o:list)
+//                       {
+//                           System.out.print(o.event_type+o.instance_id+" ");
+//                       }
+//                       System.out.println();
+//                   }
                     int f=0;
                     for(LinkedList<Object> list:InstForColoc) {
                         list.sort(Comparator.comparing(o -> o.event_type));
+
+//                        System.out.println("InstForColoc");
+//                        for(Object o:list)
+//                        {
+//                            System.out.print(o.event_type+o.instance_id+" ");
+//                        }
+//                        System.out.println();
                         int flag=0;
                         for(LinkedList<Object> l:objectOfSizeK_1)
                         {
                             l.sort(Comparator.comparing(o -> o.event_type));
-                            if(list.equals(l))
+//                            System.out.println("objectOfSizeK_1");
+//                            for(Object o:l)
+//                            {
+//                                System.out.print(o.event_type+o.instance_id+" ");
+//                            }
+//                            System.out.println();
+                            if(checkListsOfObject(list,l))
                             {
+//                                System.out.println("objectOfSizeK_1");
+//                                for(Object o:l)
+//                                {
+//                                    System.out.print(o.event_type+o.instance_id+" ");
+//                                }
+                                System.out.println();
                                 flag=1;
                                 break;
                             }
@@ -616,6 +708,27 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
                         FinalInstancesOfSizeKMap.put(m.getKey(),m.getValue());
                     }
                 }
+                System.out.println("FinalInstancesOfSizeKMap");
+                for(Map.Entry<LinkedList<String>,LinkedList<LinkedList<Object>>> m:FinalInstancesOfSizeKMap.entrySet())
+                {
+                    for(String str:m.getKey())
+                    {
+                        System.out.print(str+" ");
+
+                    }
+                    System.out.println("->");
+                    for(LinkedList<Object> list:m.getValue())
+                    {
+                        System.out.print("\t");
+                        for(Object o:list)
+                        {
+                            System.out.print(o.event_type+o.instance_id+" ");
+                        }
+                        System.out.println();
+                    }
+                }
+
+
 
                 LinkedList<Tuple2<LinkedList<String>,LinkedList<LinkedList<Object>>>> FinalInstancesOfSizeK=new LinkedList<>();
                 for(Map.Entry<LinkedList<String>,LinkedList<LinkedList<Object>>> m:FinalInstancesOfSizeKMap.entrySet())
@@ -637,6 +750,19 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
 
                 instancesOfSizeK_1=sc.parallelizePairs(FinalInstancesOfSizeK);
 
+                JavaRDD<LinkedList<String>> co_location=sc.parallelize(coloc);
+                writer = new PrintWriter(new FileWriter("CoLocation_Pattern.txt",true));
+                for (LinkedList<String> list: co_location.collect()) {
+
+                    for(String obj :list)
+                    {
+                        writer.print(obj+" ");
+                    }
+                    writer.println();
+
+
+                }
+                writer.close();
                 for(Map.Entry<LinkedList<String>,LinkedList<LinkedList<Object>>> m:FinalInstancesOfSizeKMap.entrySet())
                 {
                     Double PI=ParticipationIndex(m.getKey(),m.getValue(),countNumOfInst);
