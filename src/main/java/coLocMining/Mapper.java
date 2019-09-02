@@ -404,22 +404,58 @@ public class Mapper extends org.apache.hadoop.mapreduce.Mapper {
                     }
                 });
 
-//                //creating instances of size k;
-//                LinkedList<LinkedList<Object>> candidateInstances;
-//                for(LinkedList<String> list:allColocationsK.collect())
-//                {
-//                    Collections.sort(list);
-//                    starNeighbour.filter(new Function<Tuple2<Object, List<Object>>, Boolean>() {
-//                        @Override
-//                        public Boolean call(Tuple2<Object, List<Object>> objectListTuple2) throws Exception {
-//                            if(objectListTuple2._1.event_type.equals(list.getFirst()))
-//                            {
-//
-//                            }
-//                            return false;
-//                        }
-//                    })
-//                }
+                for(LinkedList<String> list:allColocationsK.collect())
+                {
+                    Collections.sort(list);
+
+                    /*
+                eg: colocation: BCD
+                B-> b1,b2
+                C-> c1,c3
+                d->d2
+                 */
+                    for(Tuple2<Object,List<Object>> tuple2:starNeighbour.collect())
+                    {
+                        HashMap<String, HashSet<Object>> objectOfEachType=new HashMap<>();
+                        for(String s:list)
+                        {
+                            objectOfEachType.put(s,new HashSet<>());
+                        }
+                        if(tuple2._1.event_type.equals(list.getFirst()))
+                        {
+
+                            HashSet<Object> set=objectOfEachType.get(tuple2._1.event_type);
+                            set.add(tuple2._1);
+                            objectOfEachType.replace(tuple2._1.event_type,set);
+                            for(Object o:tuple2._2)
+                            {
+                                if(list.contains(o.event_type))
+                                {
+                                    set=objectOfEachType.get(o.event_type);
+                                    set.add(o);
+                                    objectOfEachType.replace(o.event_type,set);
+                                }
+                            }
+                        }
+                        int flag=0;
+                        for(Map.Entry m:objectOfEachType.entrySet())
+                        {
+                            HashSet<Object> set= (HashSet<Object>) m.getValue();
+                            if(set.size()==0)
+                            {
+                                flag=1;
+                                break;
+                            }
+                        }
+                        if(flag==0)
+                        {
+
+                        }
+
+
+                    }
+                }
+
 
             }
             k++;
